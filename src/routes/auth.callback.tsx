@@ -13,10 +13,24 @@ export const Route = createFileRoute("/auth/callback")({
 
 function getCallbackError(): string | null {
   const params = new URLSearchParams(window.location.search);
-  const error = params.get("error_description") ?? params.get("error");
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const error =
+    params.get("error_description") ??
+    params.get("error") ??
+    hashParams.get("error_description") ??
+    hashParams.get("error");
   return error
     ? "Your email confirmation link is invalid or has expired. Please request a new one."
     : null;
+}
+
+function getHashSessionValues() {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  return {
+    accessToken: hashParams.get("access_token"),
+    refreshToken: hashParams.get("refresh_token"),
+  };
 }
 
 function redirectToLogin(message: string): void {
@@ -42,6 +56,21 @@ function AuthCallbackPage() {
             "Your email confirmation link is invalid or has expired. Please request a new one.",
           );
           return;
+        }
+      } else {
+        const { accessToken, refreshToken } = getHashSessionValues();
+        if (accessToken && refreshToken) {
+          const { error: setSessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (setSessionError) {
+            redirectToLogin(
+              "Your email confirmation link is invalid or has expired. Please request a new one.",
+            );
+            return;
+          }
         }
       }
 

@@ -126,6 +126,10 @@ export const authService = {
     if (password.length < 6)
       throw new Error("Password must be at least 6 characters.");
 
+    const emailRedirectTo = typeof window !== "undefined"
+      ? new URL("/auth/callback", window.location.origin).toString()
+      : undefined;
+
     const { data, error } = await supabase.auth.signUp({
       email: normalizedEmail,
       password,
@@ -133,9 +137,7 @@ export const authService = {
         data: {
           full_name: name.trim(),
         },
-        ...(typeof window !== "undefined"
-          ? { emailRedirectTo: `${window.location.origin}/auth/callback` }
-          : {}),
+        ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
     });
 
