@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -19,17 +18,15 @@ function getCallbackError(): string | null {
     params.get("error") ??
     hashParams.get("error_description") ??
     hashParams.get("error");
-  return error
-    ? "Your email confirmation link is invalid or has expired. Please request a new one."
-    : null;
+  return error ? "Your link is invalid or has expired. Please request a new one." : null;
 }
 
-function getHashSessionValues() {
+function getHashValues() {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-
   return {
     accessToken: hashParams.get("access_token"),
     refreshToken: hashParams.get("refresh_token"),
+    type: hashParams.get("type"),
   };
 }
 
@@ -39,8 +36,6 @@ function redirectToLogin(message: string): void {
 
 function AuthCallbackPage() {
   useEffect(() => {
-    let isMounted = true;
-
     async function completeConfirmation() {
       const callbackError = getCallbackError();
       if (callbackError) {
@@ -48,27 +43,27 @@ function AuthCallbackPage() {
         return;
       }
 
-      const code = new URLSearchParams(window.location.search).get("code");
+      const searchParams = new URLSearchParams(window.location.search);
+      const hashValues = getHashValues();
+      const isRecovery = searchParams.get("type") === "recovery" || hashValues.type === "recovery";
+
+      // 1. Exchange code for session
+      const code = searchParams.get("code");
       if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) {
-          redirectToLogin(
-            "Your email confirmation link is invalid or has expired. Please request a new one.",
-          );
+          redirectToLogin("Your link is invalid or has expired. Please request a new one.");
           return;
         }
       } else {
-        const { accessToken, refreshToken } = getHashSessionValues();
-        if (accessToken && refreshToken) {
+        // Old hash flow
+        if (hashValues.accessToken && hashValues.refreshToken) {
           const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
+            access_token: hashValues.accessToken,
+            refresh_token: hashValues.refreshToken,
           });
-
           if (setSessionError) {
-            redirectToLogin(
-              "Your email confirmation link is invalid or has expired. Please request a new one.",
-            );
+            redirectToLogin("Your link is invalid or has expired.");
             return;
           }
         }
@@ -76,9 +71,13 @@ function AuthCallbackPage() {
 
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data.session) {
-        redirectToLogin(
-          "We could not complete email verification. Please try the confirmation link again.",
-        );
+        redirectToLogin("We could not verify. Please try again.");
+        return;
+      }
+
+      // 2. IMPORTANT: If this was a password recovery, go to update password
+      if (isRecovery) {
+        window.location.replace("/auth/update-password");
         return;
       }
 
@@ -86,10 +85,6 @@ function AuthCallbackPage() {
     }
 
     void completeConfirmation();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   return (
