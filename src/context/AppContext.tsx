@@ -6,7 +6,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { authService, type AuthUser, type SignUpResult } from "@/services/auth.service";
 import {
   emptyProfile,
@@ -67,22 +66,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setTimeout(() => {
-        if (!isMounted) return;
-        const nextUser = session?.user
-          ? {
-              id: session.user.id,
-              name: session.user.user_metadata?.full_name ?? session.user.email?.split("@")[0] ?? "Student",
-              email: session.user.email ?? "",
-            }
-          : null;
-        void syncAuth(nextUser);
-      }, 0);
-    });
-
     void authService
       .getSession()
       .then(async (sessionUser) => {
@@ -106,7 +89,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
