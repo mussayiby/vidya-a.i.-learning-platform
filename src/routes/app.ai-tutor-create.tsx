@@ -1,662 +1,863 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
-
-import { AppShell } from "@/components/layout/AppShell";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-
-import { subjects } from "@/data/subjects";
-import { classLevels, languages } from "@/data/catalog";
-import { createAILesson } from "@/lib/ai-tutor.functions";
-import { toast } from "sonner";
+import { useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/app/ai-tutor-create")({
-  head: () => ({
-    meta: [
-      {
-        name: "description",
-        content:
-          "Upload a lesson and let AI automatically create an interactive tutoring experience.",
-      },
-      {
-        property: "og:title",
-        content: "Create AI Tutor Lesson — Vidya A.I.",
-      },
-      {
-        property: "og:description",
-        content:
-          "Upload lessons for AI automatic processing and student tutoring.",
-      },
-    ],
-  }),
-  component: CreateAILessonPage,
+  component: CreateAITutorLesson,
 });
 
-function CreateAILessonPage() {
+const TEACHER_LANGUAGES = [
+  { code: "en-IN", label: "English" },
+  { code: "hi-IN", label: "Hindi" },
+  { code: "kn-IN", label: "Kannada" },
+  { code: "te-IN", label: "Telugu" },
+  { code: "ta-IN", label: "Tamil" },
+  { code: "ml-IN", label: "Malayalam" },
+  { code: "mr-IN", label: "Marathi" },
+  { code: "bn-IN", label: "Bengali" },
+  { code: "gu-IN", label: "Gujarati" },
+  { code: "pa-IN", label: "Punjabi" },
+  { code: "od-IN", label: "Odia" },
+];
+
+const CLASSES = [
+  "Class 1",
+  "Class 2",
+  "Class 3",
+  "Class 4",
+  "Class 5",
+  "Class 6",
+  "Class 7",
+  "Class 8",
+  "Class 9",
+  "Class 10",
+  "Class 11",
+  "Class 12",
+];
+
+const SUBJECTS = [
+  "Mathematics",
+  "Science",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "English",
+  "Social Science",
+  "Computer Science",
+];
+
+const STORAGE_BUCKET = "ai-tutor-lessons";
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+const ALLOWED_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/aac",
+];
+
+function CreateAITutorLesson() {
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [classLevel, setClassLevel] = useState("");
+  const [subject, setSubject] = useState("");
+  const [chapter, setChapter] = useState("");
+  const [topic, setTopic] = useState("");
+  const [teacherLanguage, setTeacherLanguage] = useState("en-IN");
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    classLevel: "",
-    subjectId: "",
-    chapter: "",
-    topic: "",
-    subtopic: "",
-    teacherLanguage: "en",
-    targetLanguages: ["en"],
-    estimatedDurationMinutes: 20,
-    difficulty: "intermediate",
-    keywords: "",
-    learningObjectives: "",
-    pauseAfterEachTopic: true,
-    numQuestionsPerTopic: 1,
-  });
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
 
-  const handleChange = useCallback(
-    (field: string, value: unknown) => {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-    },
-    [],
-  );
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
 
-  const handleTargetLanguageToggle = useCallback((lang: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      targetLanguages: prev.targetLanguages.includes(lang)
-        ? prev.targetLanguages.filter((l) => l !== lang)
-        : [...prev.targetLanguages, lang],
-    }));
-  }, []);
+  function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>,
-  ) => {
-    e.preventDefault();
+    if (!file) {
+      setMediaFile(null);
+      return;
+    }
 
-    if (loading) return;
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError(
+        "Unsupported file type. Please upload MP4, WebM, MOV, MP3, WAV, OGG, AAC, or WebM audio.",
+      );
+      setMediaFile(null);
+      event.target.value = "";
+      return;
+    }
 
-    setLoading(true);
+    if (file.size > MAX_FILE_SIZE) {
+      setError(
+        "File is too large. Your current Supabase storage bucket allows files up to 50 MB.",
+      );
+      setMediaFile(null);
+      event.target.value = "";
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setMediaFile(file);
+  }
+
+  function removeMedia() {
+    setMediaFile(null);
+    setError("");
+    setSuccess("");
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setError("");
+    setSuccess("");
+    setUploadProgress("");
+
+    if (!title.trim()) {
+      setError("Please enter the lesson title.");
+      return;
+    }
+
+    if (!classLevel) {
+      setError("Please select the class.");
+      return;
+    }
+
+    if (!subject) {
+      setError("Please select the subject.");
+      return;
+    }
+
+    if (!topic.trim()) {
+      setError("Please enter the main topic.");
+      return;
+    }
+
+    if (!teacherLanguage) {
+      setError("Please select the teacher's language.");
+      return;
+    }
+
+    if (!mediaFile) {
+      setError(
+        "Please upload the teacher's recorded video or audio lesson.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    let storagePath: string | null = null;
 
     try {
-      // Validate required fields
-      if (!formData.title.trim()) {
-        toast.error("Lesson title is required");
-        return;
+      // ---------------------------------------------------------
+      // 1. CHECK AUTHENTICATION
+      // ---------------------------------------------------------
+
+      setUploadProgress("Checking your account...");
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        throw new Error(authError.message);
       }
 
-      if (!formData.classLevel) {
-        toast.error("Class level is required");
-        return;
+      if (!user) {
+        throw new Error(
+          "You must be logged in to create an AI Tutor lesson.",
+        );
       }
 
-      if (!formData.subjectId) {
-        toast.error("Subject is required");
-        return;
+      // ---------------------------------------------------------
+      // 2. CREATE UNIQUE STORAGE PATH
+      // ---------------------------------------------------------
+
+      setUploadProgress("Preparing your lesson...");
+
+      const safeFileName =
+        mediaFile.name
+          .replace(/[^a-zA-Z0-9._-]/g, "-")
+          .replace(/-+/g, "-")
+          .toLowerCase();
+
+      const uniqueId = crypto.randomUUID();
+
+      storagePath = `${user.id}/${uniqueId}-${safeFileName}`;
+
+      // ---------------------------------------------------------
+      // 3. UPLOAD ORIGINAL MEDIA
+      // ---------------------------------------------------------
+
+      setUploadProgress("Uploading teacher recording...");
+
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, mediaFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: mediaFile.type,
+        });
+
+      if (uploadError) {
+        throw new Error(
+          `Media upload failed: ${uploadError.message}`,
+        );
       }
 
-      if (!formData.topic.trim()) {
-        toast.error("Topic is required");
-        return;
+      // ---------------------------------------------------------
+      // 4. CREATE DATABASE RECORD
+      // ---------------------------------------------------------
+
+      setUploadProgress("Saving lesson information...");
+
+      const lessonPayload = {
+        teacher_id: user.id,
+        title: title.trim(),
+        description: description.trim() || null,
+
+        class_level: classLevel,
+
+        // IMPORTANT:
+        // Your database column is subject_id.
+        subject_id: subject,
+
+        chapter: chapter.trim() || null,
+
+        topic: topic.trim(),
+
+        teacher_language: teacherLanguage,
+
+        // Student languages are selected later.
+        target_languages: null,
+
+        // Original uploaded media.
+        storage_path: storagePath,
+        original_media_name: mediaFile.name,
+        original_media_type: mediaFile.type,
+        original_media_size: mediaFile.size,
+
+        // Database column is status, NOT processing_status.
+        status: "uploaded",
+
+        published: false,
+      };
+
+      const {
+        data: lesson,
+        error: lessonError,
+      } = await supabase
+        .from("ai_lessons")
+        .insert(lessonPayload as never)
+        .select("*")
+        .single();
+
+      if (lessonError) {
+        // Remove uploaded file if DB insert fails.
+        if (storagePath) {
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([storagePath]);
+        }
+
+        throw new Error(
+          `Lesson record could not be created: ${lessonError.message}`,
+        );
       }
 
-      if (formData.targetLanguages.length === 0) {
-        toast.error("Select at least one target language");
-        return;
+      if (!lesson) {
+        if (storagePath) {
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([storagePath]);
+        }
+
+        throw new Error(
+          "The lesson record could not be created.",
+        );
       }
 
-      const result = await createAILesson({
-  data: {
-    title: formData.title.trim(),
-    description: formData.description.trim(),
-    classLevel: formData.classLevel,
-    subjectId: formData.subjectId,
-    chapter: formData.chapter.trim(),
-    topic: formData.topic.trim(),
-    subtopic: formData.subtopic.trim(),
-    teacherLanguage: formData.teacherLanguage,
-    targetLanguages: formData.targetLanguages,
-    estimatedDurationMinutes:
-      formData.estimatedDurationMinutes,
-    difficulty: formData.difficulty as
-      | "beginner"
-      | "intermediate"
-      | "advanced",
-    keywords: formData.keywords
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean),
-    learningObjectives: formData.learningObjectives
-      .split("\n")
-      .map((o) => o.trim())
-      .filter(Boolean),
-    pauseAfterEachTopic:
-      formData.pauseAfterEachTopic,
-    numQuestionsPerTopic:
-      formData.numQuestionsPerTopic,
-    questionTypes: ["mcq"],
-  },
-});
+      // ---------------------------------------------------------
+      // 5. SUCCESS
+      // ---------------------------------------------------------
 
-      toast.success(
-        "Lesson created! Now upload your media file.",
+      console.log("AI Tutor lesson created:", lesson);
+
+      setUploadProgress("");
+
+      setSuccess(
+        "Lesson uploaded successfully. AI processing can now begin.",
       );
 
-      navigate({
-        to: "/app/ai-tutor/$lessonId/upload",
-        params: {
-          lessonId: result.id,
-        },
-      });
-    } catch (error) {
-      console.error("Create AI lesson error:", error);
+      setTimeout(() => {
+        navigate({
+          to: "/app/ai-tutor-library",
+        });
+      }, 1200);
+    } catch (submissionError) {
+      console.error(
+        "AI Tutor lesson creation error:",
+        submissionError,
+      );
 
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to create lesson",
+      // Cleanup uploaded media if something failed.
+      if (storagePath) {
+        try {
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([storagePath]);
+        } catch (cleanupError) {
+          console.error(
+            "Failed to clean up uploaded media:",
+            cleanupError,
+          );
+        }
+      }
+
+      setUploadProgress("");
+
+      setError(
+        submissionError instanceof Error
+          ? submissionError.message
+          : "Failed to upload the lesson.",
       );
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
-  };
+  }
+
+  const isVideo = mediaFile?.type.startsWith("video/");
+  const isAudio = mediaFile?.type.startsWith("audio/");
 
   return (
-    <AppShell>
-      <main className="px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto w-full max-w-5xl px-6 py-10">
+
         {/* Header */}
-        <div className="mb-6 flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
+        <div className="mb-8">
+          <button
             type="button"
-            onClick={() =>
-              navigate({
-                to: "/app/dashboard",
-              })
-            }
+            onClick={() => window.history.back()}
+            disabled={isSubmitting}
+            className="mb-5 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
           >
-            <ArrowLeft className="size-4" />
-          </Button>
+            ← Back
+          </button>
 
-          <div>
-            <h1 className="text-2xl font-bold">
-              Create AI Tutor Lesson
-            </h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+            Create AI Tutor Lesson
+          </h1>
 
-            <p className="mt-1 text-muted-foreground">
-              Upload your teaching material and AI will
-              automatically create an interactive lesson.
-            </p>
-          </div>
+          <p className="mt-2 max-w-3xl text-slate-600">
+            Upload the teacher's original recorded explanation.
+            Vidya A.I. will process the actual lesson and create
+            an interactive AI-powered learning experience for
+            each student.
+          </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="max-w-2xl space-y-8"
+          className="space-y-6"
         >
-          {/* =====================================================
-              LESSON BASICS
-          ====================================================== */}
-          <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold">
-              Lesson Basics
+          {/* Lesson Information */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-950">
+              Lesson Information
             </h2>
 
-            <div className="space-y-4">
+            <p className="mt-1 text-sm text-slate-500">
+              Provide the basic information about the lesson.
+            </p>
+
+            <div className="mt-6 space-y-5">
+
               {/* Title */}
               <div>
-                <Label htmlFor="title">
+                <label
+                  htmlFor="lesson-title"
+                  className="mb-2 block text-sm font-medium text-slate-800"
+                >
                   Lesson Title *
-                </Label>
+                </label>
 
-                <Input
-                  id="title"
-                  placeholder="e.g., Linear Equations in One Variable"
-                  value={formData.title}
-                  onChange={(e) =>
-                    handleChange(
-                      "title",
-                      e.target.value,
-                    )
+                <input
+                  id="lesson-title"
+                  type="text"
+                  value={title}
+                  onChange={(event) =>
+                    setTitle(event.target.value)
                   }
-                  required
+                  placeholder="e.g. Introduction to Linear Equations"
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <Label htmlFor="description">
+                <label
+                  htmlFor="lesson-description"
+                  className="mb-2 block text-sm font-medium text-slate-800"
+                >
                   Description
-                </Label>
+                </label>
 
-                <Textarea
-                  id="description"
-                  placeholder="Brief overview of what students will learn"
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) =>
-                    handleChange(
-                      "description",
-                      e.target.value,
-                    )
+                <textarea
+                  id="lesson-description"
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(event.target.value)
                   }
+                  rows={4}
+                  placeholder="Brief description of the lesson"
+                  disabled={isSubmitting}
+                  className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
                 />
               </div>
 
               {/* Class + Subject */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* CLASS LEVEL */}
+              <div className="grid gap-5 md:grid-cols-2">
+
                 <div>
-                  <Label htmlFor="classLevel">
-                    Class Level *
-                  </Label>
+                  <label
+                    htmlFor="class-level"
+                    className="mb-2 block text-sm font-medium text-slate-800"
+                  >
+                    Class *
+                  </label>
 
                   <select
-                    id="classLevel"
-                    value={formData.classLevel}
-                    onChange={(e) =>
-                      handleChange(
-                        "classLevel",
-                        e.target.value,
-                      )
+                    id="class-level"
+                    value={classLevel}
+                    onChange={(event) =>
+                      setClassLevel(event.target.value)
                     }
-                    required
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
                   >
                     <option value="">
                       Select class
                     </option>
 
-                    {classLevels.map((level) => (
+                    {CLASSES.map((item) => (
                       <option
-                        key={level.id}
-                        value={level.id}
+                        key={item}
+                        value={item}
                       >
-                        {level.label}
+                        {item}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* SUBJECT */}
                 <div>
-                  <Label htmlFor="subjectId">
+                  <label
+                    htmlFor="subject"
+                    className="mb-2 block text-sm font-medium text-slate-800"
+                  >
                     Subject *
-                  </Label>
+                  </label>
 
                   <select
-                    id="subjectId"
-                    value={formData.subjectId}
-                    onChange={(e) =>
-                      handleChange(
-                        "subjectId",
-                        e.target.value,
-                      )
+                    id="subject"
+                    value={subject}
+                    onChange={(event) =>
+                      setSubject(event.target.value)
                     }
-                    required
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
                   >
                     <option value="">
                       Select subject
                     </option>
 
-                    {subjects.map((subject) => (
+                    {SUBJECTS.map((item) => (
                       <option
-                        key={subject.id}
-                        value={subject.id}
+                        key={item}
+                        value={item}
                       >
-                        {subject.name}
+                        {item}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Chapter + Topic */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="chapter">
-                    Chapter (Optional)
-                  </Label>
-
-                  <Input
-                    id="chapter"
-                    placeholder="e.g., Algebra"
-                    value={formData.chapter}
-                    onChange={(e) =>
-                      handleChange(
-                        "chapter",
-                        e.target.value,
-                      )
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="topic">
-                    Topic *
-                  </Label>
-
-                  <Input
-                    id="topic"
-                    placeholder="e.g., Linear Equations"
-                    value={formData.topic}
-                    onChange={(e) =>
-                      handleChange(
-                        "topic",
-                        e.target.value,
-                      )
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Sub-topic */}
+              {/* Chapter */}
               <div>
-                <Label htmlFor="subtopic">
-                  Sub-topic (Optional)
-                </Label>
-
-                <Input
-                  id="subtopic"
-                  placeholder="e.g., Solving One-Step Equations"
-                  value={formData.subtopic}
-                  onChange={(e) =>
-                    handleChange(
-                      "subtopic",
-                      e.target.value,
-                    )
-                  }
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* =====================================================
-              LANGUAGE SETTINGS
-          ====================================================== */}
-          <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold">
-              Language Settings
-            </h2>
-
-            <div className="space-y-4">
-              {/* Teacher Language */}
-              <div>
-                <Label htmlFor="teacherLanguage">
-                  Your Teaching Language
-                </Label>
-
-                <Select
-                  value={formData.teacherLanguage}
-                  onValueChange={(value) =>
-                    handleChange(
-                      "teacherLanguage",
-                      value,
-                    )
-                  }
+                <label
+                  htmlFor="chapter"
+                  className="mb-2 block text-sm font-medium text-slate-800"
                 >
-                  {languages.map((lang) => (
-                    <option
-                      key={lang.id}
-                      value={lang.id}
-                    >
-                      {lang.label} ({lang.native})
-                    </option>
-                  ))}
-                </Select>
+                  Chapter
+                </label>
+
+                <input
+                  id="chapter"
+                  type="text"
+                  value={chapter}
+                  onChange={(event) =>
+                    setChapter(event.target.value)
+                  }
+                  placeholder="e.g. Algebra"
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                />
               </div>
 
-              {/* Target Languages */}
+              {/* Topic */}
               <div>
-                <Label>
-                  Target Student Languages *
-                </Label>
+                <label
+                  htmlFor="topic"
+                  className="mb-2 block text-sm font-medium text-slate-800"
+                >
+                  Main Topic *
+                </label>
 
-                <div className="mt-2 grid grid-cols-2 gap-3">
-                  {languages.map((lang) => (
-                    <label
-                      key={lang.id}
-                      className="flex cursor-pointer items-center gap-2 rounded border border-border p-2 hover:bg-muted"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.targetLanguages.includes(
-                          lang.id,
-                        )}
-                        onChange={() =>
-                          handleTargetLanguageToggle(
-                            lang.id,
-                          )
-                        }
-                        className="rounded"
-                      />
-
-                      <span className="text-sm">
-                        {lang.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <input
+                  id="topic"
+                  type="text"
+                  value={topic}
+                  onChange={(event) =>
+                    setTopic(event.target.value)
+                  }
+                  placeholder="e.g. Solving Linear Equations"
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+                />
               </div>
             </div>
-          </Card>
+          </section>
 
-          {/* =====================================================
-              CONTENT SETTINGS
-          ====================================================== */}
-          <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold">
-              Content Settings
+          {/* Teacher Language */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-950">
+              Teacher Language
             </h2>
 
-            <div className="space-y-4">
-              {/* Difficulty + Duration */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="difficulty">
-                    Difficulty Level
-                  </Label>
+            <p className="mt-1 text-sm text-slate-500">
+              Select the language actually spoken by the teacher
+              in the uploaded recording.
+            </p>
 
-                  <Select
-                    value={formData.difficulty}
-                    onValueChange={(value) =>
-                      handleChange(
-                        "difficulty",
-                        value,
-                      )
-                    }
+            <div className="mt-5">
+              <label
+                htmlFor="teacher-language"
+                className="mb-2 block text-sm font-medium text-slate-800"
+              >
+                Teacher's language *
+              </label>
+
+              <select
+                id="teacher-language"
+                value={teacherLanguage}
+                onChange={(event) =>
+                  setTeacherLanguage(event.target.value)
+                }
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-100"
+              >
+                {TEACHER_LANGUAGES.map((language) => (
+                  <option
+                    key={language.code}
+                    value={language.code}
                   >
-                    <option value="beginner">
-                      Beginner
-                    </option>
-
-                    <option value="intermediate">
-                      Intermediate
-                    </option>
-
-                    <option value="advanced">
-                      Advanced
-                    </option>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="duration">
-                    Estimated Duration (minutes)
-                  </Label>
-
-                  <Input
-                    id="duration"
-                    type="number"
-                    min="1"
-                    max="480"
-                    value={
-                      formData.estimatedDurationMinutes
-                    }
-                    onChange={(e) => {
-                      const value = Number(
-                        e.target.value,
-                      );
-
-                      handleChange(
-                        "estimatedDurationMinutes",
-                        Number.isNaN(value)
-                          ? 1
-                          : value,
-                      );
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Keywords */}
-              <div>
-                <Label htmlFor="keywords">
-                  Keywords (comma-separated)
-                </Label>
-
-                <Textarea
-                  id="keywords"
-                  placeholder="equation, variable, solution, ..."
-                  rows={2}
-                  value={formData.keywords}
-                  onChange={(e) =>
-                    handleChange(
-                      "keywords",
-                      e.target.value,
-                    )
-                  }
-                />
-              </div>
-
-              {/* Learning Objectives */}
-              <div>
-                <Label htmlFor="objectives">
-                  Learning Objectives (one per line)
-                </Label>
-
-                <Textarea
-                  id="objectives"
-                  placeholder={`Student will be able to solve linear equations
-Student will understand the concept of variables`}
-                  rows={3}
-                  value={
-                    formData.learningObjectives
-                  }
-                  onChange={(e) =>
-                    handleChange(
-                      "learningObjectives",
-                      e.target.value,
-                    )
-                  }
-                />
-              </div>
-
-              {/* Questions */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="pauseTopics"
-                    checked={
-                      formData.pauseAfterEachTopic
-                    }
-                    onChange={(e) =>
-                      handleChange(
-                        "pauseAfterEachTopic",
-                        e.target.checked,
-                      )
-                    }
-                    className="rounded"
-                  />
-
-                  <Label
-                    htmlFor="pauseTopics"
-                    className="mb-0"
-                  >
-                    Pause after each topic for
-                    questions
-                  </Label>
-                </div>
-
-                {formData.pauseAfterEachTopic && (
-                  <div>
-                    <Label htmlFor="numQuestions">
-                      Questions per topic
-                    </Label>
-
-                    <Select
-                      value={formData.numQuestionsPerTopic.toString()}
-                      onValueChange={(value) =>
-                        handleChange(
-                          "numQuestionsPerTopic",
-                          Number(value),
-                        )
-                      }
-                    >
-                      {[1, 2, 3, 4, 5].map(
-                        (n) => (
-                          <option
-                            key={n}
-                            value={n}
-                          >
-                            {n} question
-                            {n > 1 ? "s" : ""}
-                          </option>
-                        ),
-                      )}
-                    </Select>
-                  </div>
-                )}
-              </div>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
             </div>
-          </Card>
+          </section>
 
-          {/* =====================================================
-              SUBMIT
-          ====================================================== */}
-          <div className="flex gap-3 pt-4">
-            <Button
-              type="submit"
-              disabled={loading}
-              className="gap-2"
+          {/* Recorded Media */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-950">
+              Teacher's Recorded Lesson
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Upload the original video or audio recording of
+              the teacher explaining the lesson.
+            </p>
+
+            <label
+              htmlFor="lesson-media"
+              className={`mt-6 flex min-h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 text-center transition ${
+                isSubmitting
+                  ? "cursor-not-allowed border-slate-200 bg-slate-100"
+                  : "cursor-pointer border-slate-300 bg-slate-50 hover:border-indigo-400 hover:bg-indigo-50/40"
+              }`}
             >
-              {loading && (
-                <Loader2 className="size-4 animate-spin" />
+              <div className="text-5xl">
+                {isVideo
+                  ? "🎥"
+                  : isAudio
+                    ? "🎙️"
+                    : "🎬"}
+              </div>
+
+              <div className="mt-4 text-lg font-semibold text-slate-900">
+                {mediaFile
+                  ? mediaFile.name
+                  : "Upload teacher video or audio"}
+              </div>
+
+              <div className="mt-2 text-sm text-slate-500">
+                Video: MP4, WebM, MOV
+              </div>
+
+              <div className="text-sm text-slate-500">
+                Audio: MP3, WAV, OGG, AAC, WebM
+              </div>
+
+              <div className="mt-2 text-xs text-slate-400">
+                Maximum file size: 50 MB
+              </div>
+
+              {mediaFile && (
+                <div className="mt-3 text-sm font-medium text-indigo-600">
+                  {(mediaFile.size / 1024 / 1024).toFixed(2)} MB selected
+                </div>
               )}
 
-              {loading
-                ? "Creating..."
-                : "Create Lesson & Upload Media"}
-            </Button>
+              <input
+                id="lesson-media"
+                type="file"
+                accept="video/*,audio/*"
+                onChange={handleMediaChange}
+                disabled={isSubmitting}
+                className="hidden"
+              />
+            </label>
 
-            <Button
+            {mediaFile && (
+              <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-4">
+
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-900">
+                      {mediaFile.name}
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      {isVideo
+                        ? "Video"
+                        : isAudio
+                          ? "Audio"
+                          : "Media"}{" "}
+                      · {mediaFile.type || "Unknown type"} ·{" "}
+                      {(mediaFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={removeMedia}
+                    disabled={isSubmitting}
+                    className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Student Language */}
+          <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-6">
+            <h2 className="text-xl font-semibold text-slate-950">
+              Student Language
+            </h2>
+
+            <div className="mt-4 rounded-xl border border-indigo-200 bg-white p-5">
+              <div className="flex gap-3">
+                <span className="text-xl">🌐</span>
+
+                <div>
+                  <p className="font-semibold text-slate-900">
+                    Students choose their own mother tongue.
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    The teacher does not select student languages
+                    while creating the lesson. When a student opens
+                    this lesson, the student will choose their
+                    preferred mother tongue.
+                  </p>
+
+                  <div className="mt-4 rounded-lg bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+                    <strong>Example:</strong> One student can choose
+                    Hindi, another can choose Kannada, and another
+                    can choose Telugu for the same lesson.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* AI Behaviour */}
+          <section className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-6">
+            <h2 className="text-xl font-semibold text-slate-950">
+              AI Tutor Behaviour
+            </h2>
+
+            <div className="mt-5 space-y-4">
+              {[
+                [
+                  "Understand the actual recording",
+                  "AI processes the actual teacher recording rather than using hardcoded lesson text.",
+                ],
+                [
+                  "Automatic topic detection",
+                  "AI will identify topics actually explained by the teacher.",
+                ],
+                [
+                  "Student-selected language",
+                  "Every student can independently choose their mother tongue.",
+                ],
+                [
+                  "Dynamic AI translation",
+                  "The lesson will be dynamically translated according to the student's selected language.",
+                ],
+                [
+                  "Natural AI female voice",
+                  "The translated explanation can use a consistent natural AI female voice.",
+                ],
+                [
+                  "Topic-based assessment",
+                  "AI can generate questions and MCQs from the actual content taught.",
+                ],
+                [
+                  "Remedial teaching",
+                  "If a student struggles with a topic, AI can provide targeted additional teaching.",
+                ],
+              ].map(([heading, text]) => (
+                <div
+                  className="flex gap-3"
+                  key={heading}
+                >
+                  <span className="mt-0.5">✓</span>
+
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {heading}
+                    </p>
+
+                    <p className="text-sm text-slate-600">
+                      {text}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Architecture */}
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <h2 className="text-lg font-semibold text-amber-950">
+              How student language works
+            </h2>
+
+            <div className="mt-3 space-y-2 text-sm leading-6 text-amber-900">
+              <p>
+                <strong>Teacher:</strong> uploads one original
+                lesson and selects the language spoken in that
+                recording.
+              </p>
+
+              <p>
+                <strong>Student:</strong> opens the lesson and
+                chooses their own mother tongue.
+              </p>
+
+              <p>
+                <strong>Vidya A.I.:</strong> uses the student's
+                selected language for translation, explanation,
+                questions, and AI narration.
+              </p>
+
+              <p>
+                Therefore, the teacher does not need to upload
+                separate videos for Hindi, Kannada, Telugu, etc.
+              </p>
+            </div>
+          </section>
+
+          {/* Upload status */}
+          {uploadProgress && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-700">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-700" />
+                {uploadProgress}
+              </div>
+            </div>
+          )}
+
+          {/* Success */}
+          {success && (
+            <div
+              role="status"
+              className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700"
+            >
+              ✓ {success}
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+
+            <button
               type="button"
-              variant="outline"
               onClick={() =>
                 navigate({
-                  to: "/app/dashboard",
+                  to: "/app/ai-tutor-library",
                 })
               }
+              disabled={isSubmitting}
+              className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Cancel
-            </Button>
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-xl bg-indigo-600 px-7 py-3 font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting
+                ? "Uploading..."
+                : "Upload & Process Lesson"}
+            </button>
           </div>
         </form>
-      </main>
-    </AppShell>
+      </div>
+    </div>
   );
 }

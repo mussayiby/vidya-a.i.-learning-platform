@@ -1,121 +1,121 @@
 /**
- * AI Tutor lesson management API
- * Handles lesson creation, metadata updates, and file uploads.
+ * VIDYA A.I. — AI TUTOR
  *
- * NOTE:
- * Auth is currently stubbed. In production, replace
- * getMockUserId() with proper authenticated user/session handling.
+ * Server-side lesson management.
+ *
+ * IMPORTANT:
+ * - No mock teacher/user ID.
+ * - No hardcoded lesson content.
+ * - No fake AI results.
+ * - No fake translation.
+ * - No fake processing status.
+ *
+ * The actual AI pipeline will be connected in the following steps.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { Database } from "@/integrations/supabase/types";
 
 /* =========================================================
-   VALIDATION SCHEMAS
+   VALIDATION
    ========================================================= */
 
 const CreateLessonInput = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
 
-  description: z.string().max(1000).optional(),
+  description: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional(),
 
-  classLevel: z.string().min(1),
+  classLevel: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100),
 
-  subjectId: z.string().min(1),
+  subject: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200),
 
-  chapter: z.string().max(200).optional(),
-
-  topic: z.string().min(1).max(200),
-
-  subtopic: z.string().max(200).optional(),
+  chapter: z
+    .string()
+    .trim()
+    .max(200)
+    .optional(),
 
   teacherLanguage: z
     .string()
+    .trim()
     .min(2)
-    .max(5)
-    .default("en"),
+    .max(20),
 
   targetLanguages: z
-    .array(z.string().min(2).max(5))
-    .min(1)
-    .default(["en"]),
-
-  estimatedDurationMinutes: z
-    .number()
-    .int()
-    .min(1)
-    .max(480)
-    .optional(),
-
-  difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
-    .default("intermediate"),
-
-  prerequisites: z.array(z.string()).optional(),
-
-  keywords: z.array(z.string()).optional(),
-
-  learningObjectives: z.array(z.string()).optional(),
-
-  pauseAfterEachTopic: z
-    .boolean()
-    .default(true),
-
-  numQuestionsPerTopic: z
-    .number()
-    .int()
-    .min(1)
-    .max(5)
-    .default(1),
-
-  questionTypes: z
     .array(
-      z.enum([
-        "mcq",
-        "true_false",
-        "fill_blank",
-        "short_answer",
-      ]),
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(20),
     )
-    .min(1)
-    .default(["mcq"]),
+    .min(1),
 });
 
-const UpdateLessonInput =
-  CreateLessonInput.partial().extend({
-    lessonId: z.string().uuid(),
-  });
-
-const PublishLessonInput = z.object({
+const LessonIdInput = z.object({
   lessonId: z.string().uuid(),
-  publish: z.boolean(),
 });
 
-const GetLessonInput = z.object({
-  lessonId: z.string().uuid(),
+const PublishedLessonsInput = z.object({
+  classLevel: z.string().optional(),
+  subject: z.string().optional(),
+  targetLanguage: z.string().optional(),
 });
 
 /* =========================================================
-   AUTH HELPER
+   AUTHENTICATION
    ========================================================= */
 
 /**
- * Temporary authentication helper.
+ * Get the currently authenticated Supabase user.
  *
- * This UUID is the existing teacher/user UUID
- * from the Supabase database.
+ * We intentionally do NOT use a hardcoded UUID.
  *
- * Replace this with real Supabase authentication
- * before production deployment.
+ * NOTE:
+ * The exact authenticated-user integration will be connected
+ * to the project's existing Supabase session helper if required.
  */
-function getMockUserId(): string {
-  return "d0a44db2-5d11-43bf-ada6-2d40d1416b11";
+async function getAuthenticatedUser() {
+  /*
+   * The admin client cannot automatically know which browser
+   * user made the request.
+   *
+   * We therefore first try to use the project's server-side
+   * Supabase auth mechanism.
+   *
+   * This function is intentionally isolated so authentication
+   * can be changed without rewriting the lesson logic.
+   */
+
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser();
+
+  if (error || !user) {
+    throw new Error(
+      "Authentication required. Please sign in before using AI Tutor.",
+    );
+  }
+
+  return user;
 }
 
 /* =========================================================
-   CREATE AI LESSON
+   CREATE LESSON
    ========================================================= */
 
 export const createAILesson = createServerFn({
@@ -125,7 +125,7 @@ export const createAILesson = createServerFn({
     CreateLessonInput.parse(input),
   )
   .handler(async ({ data }) => {
-    const userId = getMockUserId();
+    const user = await getAuthenticatedUser();
 
     const {
       data: lesson,
@@ -133,52 +133,55 @@ export const createAILesson = createServerFn({
     } = await supabaseAdmin
       .from("ai_lessons")
       .insert({
-  teacher_id: userId,
+        teacher_id: user.id,
 
-  title: data.title,
-  description: data.description ?? null,
+        title: data.title,
 
-  class_level: data.classLevel,
-  subject_id: data.subjectId,
+        description:
+          data.description?.trim() || null,
 
-  chapter: data.chapter ?? null,
-  topic: data.topic,
-  subtopic: data.subtopic ?? null,
+        class_level: data.classLevel,
 
-  teacher_language: data.teacherLanguage,
-  target_languages: data.targetLanguages,
+        /*
+         * The old database field is named subject_id.
+         *
+         * Until we inspect your actual subjects schema,
+         * we store the selected subject value here.
+         */
+        subject_id: data.subject,
+chapter:
+  data.chapter?.trim() || null,
 
-  estimated_duration_minutes:
-    data.estimatedDurationMinutes ?? null,
+topic:
+  data.title,
 
-  difficulty: data.difficulty,
+teacher_language:
+  data.teacherLanguage,
+        target_languages:
+          data.targetLanguages,
 
-  prerequisites: data.prerequisites ?? null,
-  keywords: data.keywords ?? null,
-  learning_objectives: data.learningObjectives ?? null,
+        /*
+         * These values describe the new workflow.
+         *
+         * The database migration in the next step will make
+         * the processing state explicit.
+         */
+        status: "uploaded",
 
-  pause_after_each_topic:
-    data.pauseAfterEachTopic,
-
-  num_questions_per_topic:
-    data.numQuestionsPerTopic,
-
-  question_types: data.questionTypes,
-
-  status: "uploaded",
-})
-      .select()
+        published: false,
+      })
+      .select("*")
       .single();
 
     if (error) {
       throw new Error(
-        `Failed to create lesson: ${error.message}`,
+        `Failed to create AI Tutor lesson: ${error.message}`,
       );
     }
 
     if (!lesson) {
       throw new Error(
-        "Lesson was not created.",
+        "AI Tutor lesson was not created.",
       );
     }
 
@@ -186,17 +189,17 @@ export const createAILesson = createServerFn({
   });
 
 /* =========================================================
-   GET AI LESSON
+   GET ONE LESSON
    ========================================================= */
 
 export const getAILesson = createServerFn({
   method: "POST",
 })
   .inputValidator((input: unknown) =>
-    GetLessonInput.parse(input),
+    LessonIdInput.parse(input),
   )
   .handler(async ({ data }) => {
-    const userId = getMockUserId();
+    const user = await getAuthenticatedUser();
 
     const {
       data: lesson,
@@ -209,27 +212,27 @@ export const getAILesson = createServerFn({
 
     if (error) {
       throw new Error(
-        `Lesson not found: ${error.message}`,
+        `Failed to load AI Tutor lesson: ${error.message}`,
       );
     }
 
     if (!lesson) {
       throw new Error(
-        "Lesson not found.",
+        "AI Tutor lesson was not found.",
       );
     }
 
     /*
-     * Verify access:
-     * - Teacher can see their own lesson.
-     * - Others can see published lessons.
+     * Teachers can access their own lessons.
+     *
+     * Students can access only published lessons.
      */
     if (
-      lesson.teacher_id !== userId &&
+      lesson.teacher_id !== user.id &&
       !lesson.published
     ) {
       throw new Error(
-        "Unauthorized: You do not have access to this lesson",
+        "You do not have permission to access this lesson.",
       );
     }
 
@@ -244,7 +247,7 @@ export const listMyAILessons =
   createServerFn({
     method: "POST",
   }).handler(async () => {
-    const userId = getMockUserId();
+    const user = await getAuthenticatedUser();
 
     const {
       data: lessons,
@@ -252,14 +255,14 @@ export const listMyAILessons =
     } = await supabaseAdmin
       .from("ai_lessons")
       .select("*")
-      .eq("teacher_id", userId)
+      .eq("teacher_id", user.id)
       .order("created_at", {
         ascending: false,
       });
 
     if (error) {
       throw new Error(
-        `Failed to fetch lessons: ${error.message}`,
+        `Failed to load your AI Tutor lessons: ${error.message}`,
       );
     }
 
@@ -267,7 +270,7 @@ export const listMyAILessons =
   });
 
 /* =========================================================
-   LIST PUBLISHED LESSONS
+   LIST PUBLISHED LESSONS FOR STUDENTS
    ========================================================= */
 
 export const listPublishedAILessons =
@@ -275,15 +278,11 @@ export const listPublishedAILessons =
     method: "POST",
   })
     .inputValidator((input: unknown) =>
-      z
-        .object({
-          classLevel: z.string().optional(),
-          subjectId: z.string().optional(),
-          targetLanguage: z.string().optional(),
-        })
-        .parse(input),
+      PublishedLessonsInput.parse(input),
     )
     .handler(async ({ data }) => {
+      await getAuthenticatedUser();
+
       let query = supabaseAdmin
         .from("ai_lessons")
         .select("*")
@@ -297,10 +296,10 @@ export const listPublishedAILessons =
         );
       }
 
-      if (data.subjectId) {
+      if (data.subject) {
         query = query.eq(
           "subject_id",
-          data.subjectId,
+          data.subject,
         );
       }
 
@@ -323,7 +322,7 @@ export const listPublishedAILessons =
 
       if (error) {
         throw new Error(
-          `Failed to fetch lessons: ${error.message}`,
+          `Failed to load published AI Tutor lessons: ${error.message}`,
         );
       }
 
@@ -331,224 +330,93 @@ export const listPublishedAILessons =
     });
 
 /* =========================================================
-   UPDATE AI LESSON
+   DELETE LESSON
    ========================================================= */
 
-export const updateAILesson =
+export const deleteAILesson =
   createServerFn({
     method: "POST",
   })
     .inputValidator((input: unknown) =>
-      UpdateLessonInput.parse(input),
+      LessonIdInput.parse(input),
     )
     .handler(async ({ data }) => {
-      const userId = getMockUserId();
-
-      /* -----------------------------------------
-         Verify ownership
-         ----------------------------------------- */
+      const user = await getAuthenticatedUser();
 
       const {
         data: lesson,
         error: fetchError,
       } = await supabaseAdmin
         .from("ai_lessons")
-        .select("teacher_id, status")
+        .select(
+          "id, teacher_id, status",
+        )
         .eq("id", data.lessonId)
         .single();
 
-      if (
-        fetchError ||
-        !lesson
-      ) {
+      if (fetchError || !lesson) {
         throw new Error(
-          "Lesson not found",
+          "AI Tutor lesson was not found.",
         );
       }
 
-      if (
-        lesson.teacher_id !== userId
-      ) {
+      if (lesson.teacher_id !== user.id) {
         throw new Error(
-          "Unauthorized",
+          "You do not have permission to delete this lesson.",
         );
       }
 
+      /*
+       * Once the real processing pipeline has started,
+       * deletion will also have to clean up:
+       *
+       * - original video
+       * - generated audio
+       * - generated videos
+       * - transcripts
+       * - topics
+       * - questions
+       * - processing jobs
+       *
+       * Therefore we do not silently delete processed lessons.
+       */
       if (
-        lesson.status !== "uploaded"
+        lesson.status !== "uploaded" &&
+        lesson.status !== "failed"
       ) {
         throw new Error(
-          "Cannot update lesson metadata after processing has started",
+          "This lesson has already entered AI processing and cannot be deleted from this action.",
         );
       }
-
-      /* -----------------------------------------
-         Build update object
-         ----------------------------------------- */
-
-      const updateData: Database["public"]["Tables"]["ai_lessons"]["Update"] = {};
-      if (data.title !== undefined) {
-        updateData.title =
-          data.title;
-      }
-
-      if (
-        data.description !==
-        undefined
-      ) {
-        updateData.description =
-          data.description;
-      }
-
-      if (
-        data.classLevel !==
-        undefined
-      ) {
-        updateData.class_level =
-          data.classLevel;
-      }
-
-      if (
-        data.subjectId !==
-        undefined
-      ) {
-        updateData.subject_id =
-          data.subjectId;
-      }
-
-      if (
-        data.chapter !==
-        undefined
-      ) {
-        updateData.chapter =
-          data.chapter;
-      }
-
-      if (
-        data.topic !==
-        undefined
-      ) {
-        updateData.topic =
-          data.topic;
-      }
-
-      if (
-        data.subtopic !==
-        undefined
-      ) {
-        updateData.subtopic =
-          data.subtopic;
-      }
-
-      if (
-        data.teacherLanguage !==
-        undefined
-      ) {
-        updateData.teacher_language =
-          data.teacherLanguage;
-      }
-
-      if (
-        data.targetLanguages !==
-        undefined
-      ) {
-        updateData.target_languages =
-          data.targetLanguages;
-      }
-
-      if (
-        data.estimatedDurationMinutes !==
-        undefined
-      ) {
-        updateData.estimated_duration_minutes =
-          data.estimatedDurationMinutes;
-      }
-
-      if (
-        data.difficulty !==
-        undefined
-      ) {
-        updateData.difficulty =
-          data.difficulty;
-      }
-
-      if (
-        data.prerequisites !==
-        undefined
-      ) {
-        updateData.prerequisites =
-          data.prerequisites;
-      }
-
-      if (
-        data.keywords !==
-        undefined
-      ) {
-        updateData.keywords =
-          data.keywords;
-      }
-
-      if (
-        data.learningObjectives !==
-        undefined
-      ) {
-        updateData.learning_objectives =
-          data.learningObjectives;
-      }
-
-      if (
-        data.pauseAfterEachTopic !==
-        undefined
-      ) {
-        updateData.pause_after_each_topic =
-          data.pauseAfterEachTopic;
-      }
-
-      if (
-        data.numQuestionsPerTopic !==
-        undefined
-      ) {
-        updateData.num_questions_per_topic =
-          data.numQuestionsPerTopic;
-      }
-
-      if (
-        data.questionTypes !==
-        undefined
-      ) {
-        updateData.question_types =
-          data.questionTypes;
-      }
-
-      updateData.updated_at =
-        new Date().toISOString();
-
-      /* -----------------------------------------
-         Update database
-         ----------------------------------------- */
 
       const {
-        data: updated,
-        error: updateError,
+        error,
       } = await supabaseAdmin
         .from("ai_lessons")
-        .update(updateData)
+        .delete()
         .eq("id", data.lessonId)
-        .select()
-        .single();
+        .eq("teacher_id", user.id);
 
-      if (updateError) {
+      if (error) {
         throw new Error(
-          `Failed to update lesson: ${updateError.message}`,
+          `Failed to delete AI Tutor lesson: ${error.message}`,
         );
       }
 
-      return updated;
+      return {
+        success: true,
+        lessonId: data.lessonId,
+      };
     });
 
 /* =========================================================
-   PUBLISH / UNPUBLISH AI LESSON
+   PUBLISH / UNPUBLISH
    ========================================================= */
+
+const PublishLessonInput = z.object({
+  lessonId: z.string().uuid(),
+  publish: z.boolean(),
+});
 
 export const publishAILesson =
   createServerFn({
@@ -558,11 +426,7 @@ export const publishAILesson =
       PublishLessonInput.parse(input),
     )
     .handler(async ({ data }) => {
-      const userId = getMockUserId();
-
-      /* -----------------------------------------
-         Verify ownership
-         ----------------------------------------- */
+      const user = await getAuthenticatedUser();
 
       const {
         data: lesson,
@@ -570,148 +434,139 @@ export const publishAILesson =
       } = await supabaseAdmin
         .from("ai_lessons")
         .select(
-          "teacher_id, status",
+          "id, teacher_id, status",
         )
         .eq("id", data.lessonId)
         .single();
 
-      if (
-        fetchError ||
-        !lesson
-      ) {
+      if (fetchError || !lesson) {
         throw new Error(
-          "Lesson not found",
+          "AI Tutor lesson was not found.",
         );
       }
 
-      if (
-        lesson.teacher_id !== userId
-      ) {
+      if (lesson.teacher_id !== user.id) {
         throw new Error(
-          "Unauthorized",
+          "You do not have permission to publish this lesson.",
         );
       }
 
-      /* -----------------------------------------
-         Publishing requires ready status
-         ----------------------------------------- */
-
+      /*
+       * A lesson can only become visible to students after
+       * the actual AI pipeline has completed successfully.
+       */
       if (
         data.publish &&
         lesson.status !== "ready"
       ) {
         throw new Error(
-          `Cannot publish lesson. Current status: ${lesson.status}. Lesson must be "ready" to publish.`,
+          "The AI Tutor lesson cannot be published until AI processing is complete.",
         );
       }
 
-      /* -----------------------------------------
-         Update published state
-         ----------------------------------------- */
-
       const {
-        data: updated,
+        data: updatedLesson,
         error,
       } = await supabaseAdmin
         .from("ai_lessons")
         .update({
-          published:
-            data.publish,
-
+          published: data.publish,
           updated_at:
             new Date().toISOString(),
         })
-        .eq(
-          "id",
-          data.lessonId,
-        )
-        .select()
+        .eq("id", data.lessonId)
+        .eq("teacher_id", user.id)
+        .select("*")
         .single();
 
       if (error) {
         throw new Error(
-          `Failed to publish lesson: ${error.message}`,
+          `Failed to update lesson publication status: ${error.message}`,
         );
       }
 
-      return updated;
+      return updatedLesson;
     });
 
 /* =========================================================
-   DELETE AI LESSON
+   START PROCESSING
    ========================================================= */
 
-export const deleteAILesson =
+/**
+ * This function will be connected to the real AI Tutor
+ * processing worker in the next implementation step.
+ *
+ * It is intentionally NOT pretending to process anything yet.
+ */
+const StartProcessingInput = z.object({
+  lessonId: z.string().uuid(),
+});
+
+export const startAITutorProcessing =
   createServerFn({
     method: "POST",
   })
     .inputValidator((input: unknown) =>
-      GetLessonInput.parse(input),
+      StartProcessingInput.parse(input),
     )
     .handler(async ({ data }) => {
-      const userId = getMockUserId();
-
-      /* -----------------------------------------
-         Verify ownership
-         ----------------------------------------- */
+      const user = await getAuthenticatedUser();
 
       const {
         data: lesson,
-        error: fetchError,
+        error,
       } = await supabaseAdmin
         .from("ai_lessons")
-        .select(
-          "teacher_id, status",
-        )
+        .select("*")
         .eq("id", data.lessonId)
         .single();
 
-      if (
-        fetchError ||
-        !lesson
-      ) {
+      if (error || !lesson) {
         throw new Error(
-          "Lesson not found",
+          "AI Tutor lesson was not found.",
         );
       }
 
-      if (
-        lesson.teacher_id !== userId
-      ) {
+      if (lesson.teacher_id !== user.id) {
         throw new Error(
-          "Unauthorized",
+          "You do not have permission to process this lesson.",
         );
       }
 
-      if (
-        lesson.status !==
-        "uploaded"
-      ) {
+      if (!lesson.target_languages?.length) {
         throw new Error(
-          "Cannot delete lesson after processing has started",
+          "At least one target language is required.",
         );
       }
 
-      /* -----------------------------------------
-         Delete lesson
-         ----------------------------------------- */
-
-      const { error } =
-        await supabaseAdmin
-          .from("ai_lessons")
-          .delete()
-          .eq(
-            "id",
-            data.lessonId,
-          );
-
-      if (error) {
-        throw new Error(
-          `Failed to delete lesson: ${error.message}`,
-        );
-      }
+      /*
+       * The next backend step will replace this section with:
+       *
+       * lesson
+       *   ↓
+       * original video
+       *   ↓
+       * Sarvam transcription
+       *   ↓
+       * Gemini lesson analysis
+       *   ↓
+       * automatic topic segmentation
+       *   ↓
+       * questions / MCQs
+       *   ↓
+       * translation
+       *   ↓
+       * natural female AI voice
+       *   ↓
+       * translated video
+       *   ↓
+       * ready
+       */
 
       return {
-        success: true,
+        lessonId: lesson.id,
+        status: lesson.status,
+        message:
+          "Lesson is ready for the real AI processing pipeline.",
       };
     });
