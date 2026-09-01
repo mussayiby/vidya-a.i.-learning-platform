@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import * as Icons from "lucide-react";
+import { useMemo } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProgressBar } from "@/components/ui-kit/ProgressBar";
 import {
   achievements,
   quizPerformance,
-  studyStats,
-  weeklyStudy,
 } from "@/data/dashboard";
 import { lessonsBySubject, subjects } from "@/data/subjects";
 import { useApp } from "@/hooks/useApp";
+import { dashboardAnalyticsService } from "@/services/dashboard-analytics.service";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/progress")({
@@ -32,22 +32,32 @@ export const Route = createFileRoute("/app/progress")({
 });
 
 function ProgressPage() {
-  const { completedLessons } = useApp();
-  const maxMinutes = Math.max(...weeklyStudy.map((d) => d.minutes));
+  const { user, completedLessons } = useApp();
+  
+  const weeklyData = useMemo(() => {
+    if (!user?.id) return [];
+    return dashboardAnalyticsService.getWeeklyBreakdown(user.id);
+  }, [user?.id]);
+
+  const hoursThisWeek = useMemo(() => {
+    if (!user?.id) return 0;
+    return dashboardAnalyticsService.getHoursThisWeek(user.id);
+  }, [user?.id]);
+
+  const maxMinutes = Math.max(...weeklyData.map((d) => d.minutes), 1);
 
   return (
     <AppShell>
       <main className="px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="text-2xl font-bold tracking-tight">Progress</h1>
         <p className="mt-1 text-muted-foreground">
-          {studyStats.hoursThisWeek} hours studied this week across your
-          subjects.
+          {hoursThisWeek} hours studied this week across your subjects.
         </p>
 
         <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-card">
           <h2 className="font-semibold">Study time this week</h2>
           <div className="mt-4 flex h-40 items-end gap-3">
-            {weeklyStudy.map((day) => (
+            {weeklyData.map((day) => (
               <div key={day.day} className="flex flex-1 flex-col items-center gap-2">
                 <div
                   className="w-full rounded-t-lg bg-gradient-brand"

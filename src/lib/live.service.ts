@@ -89,7 +89,13 @@ export const liveService = {
         subject: input.subject,
         grade: input.grade,
         teacher_lang: input.teacherLang,
-        teacher_name: input.teacherName ?? user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "Teacher",
+        teacher_name:
+  input.teacherName ??
+  (typeof user.user_metadata?.["full_name"] === "string"
+    ? user.user_metadata["full_name"]
+    : null) ??
+  user.email?.split("@")[0] ??
+  "Teacher",
         teacher_id: user.id,
         status: "scheduled",
         is_live: false,
@@ -164,7 +170,7 @@ export const liveService = {
       throw new Error("Class not found. Please check your class code.");
     }
 
-    if (classroom.status === "ended" || classroom.is_live === false) {
+    if (classroom.status === "ended") {
       throw new Error("This class has ended and cannot be joined.");
     }
 

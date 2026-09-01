@@ -14,11 +14,14 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as AppAiTutorCreateRouteImport } from './routes/app.ai-tutor-create'
+import { Route as AppAiTutorLibraryRouteImport } from './routes/app.ai-tutor-library'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppProgressRouteImport } from './routes/app.progress'
 import { Route as AppTutorRouteImport } from './routes/app.tutor'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthUpdatePasswordRouteImport } from './routes/auth.update-password'
 import { Route as OnboardingClassRouteImport } from './routes/onboarding/class'
 import { Route as OnboardingCompleteRouteImport } from './routes/onboarding/complete'
 import { Route as OnboardingLanguageRouteImport } from './routes/onboarding/language'
@@ -26,11 +29,13 @@ import { Route as OnboardingPreferencesRouteImport } from './routes/onboarding/p
 import { Route as OnboardingReviewRouteImport } from './routes/onboarding/review'
 import { Route as OnboardingSubjectsRouteImport } from './routes/onboarding/subjects'
 import { Route as OnboardingWelcomeRouteImport } from './routes/onboarding/welcome'
+import { Route as AppAiTutorLessonIdRouteImport } from './routes/app.ai-tutor.$lessonId'
 import { Route as AppLessonsLessonIdRouteImport } from './routes/app.lessons.$lessonId'
 import { Route as AppLiveCreateRouteImport } from './routes/app.live.create'
 import { Route as AppLiveJoinRouteImport } from './routes/app.live.join'
 import { Route as AppSubjectsIndexRouteImport } from './routes/app.subjects.index'
 import { Route as AppSubjectsSubjectIdRouteImport } from './routes/app.subjects.$subjectId'
+import { Route as AppAiTutorLessonIdUploadRouteImport } from './routes/app.ai-tutor.$lessonId.upload'
 import { Route as AppLiveTeachCodeRouteImport } from './routes/app.live.teach.$code'
 import { Route as AppLiveWatchCodeRouteImport } from './routes/app.live.watch.$code'
 
@@ -59,6 +64,16 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAiTutorCreateRoute = AppAiTutorCreateRouteImport.update({
+  id: '/app/ai-tutor-create',
+  path: '/app/ai-tutor-create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppAiTutorLibraryRoute = AppAiTutorLibraryRouteImport.update({
+  id: '/app/ai-tutor-library',
+  path: '/app/ai-tutor-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/app/dashboard',
   path: '/app/dashboard',
@@ -82,6 +97,11 @@ const AppTutorRoute = AppTutorRouteImport.update({
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthUpdatePasswordRoute = AuthUpdatePasswordRouteImport.update({
+  id: '/auth/update-password',
+  path: '/auth/update-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingClassRoute = OnboardingClassRouteImport.update({
@@ -119,6 +139,11 @@ const OnboardingWelcomeRoute = OnboardingWelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => OnboardingRoute,
 } as any)
+const AppAiTutorLessonIdRoute = AppAiTutorLessonIdRouteImport.update({
+  id: '/app/ai-tutor/$lessonId',
+  path: '/app/ai-tutor/$lessonId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppLessonsLessonIdRoute = AppLessonsLessonIdRouteImport.update({
   id: '/app/lessons/$lessonId',
   path: '/app/lessons/$lessonId',
@@ -144,6 +169,12 @@ const AppSubjectsSubjectIdRoute = AppSubjectsSubjectIdRouteImport.update({
   path: '/app/subjects/$subjectId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppAiTutorLessonIdUploadRoute =
+  AppAiTutorLessonIdUploadRouteImport.update({
+    id: '/upload',
+    path: '/upload',
+    getParentRoute: () => AppAiTutorLessonIdRoute,
+  } as any)
 const AppLiveTeachCodeRoute = AppLiveTeachCodeRouteImport.update({
   id: '/app/live/teach/$code',
   path: '/app/live/teach/$code',
@@ -161,11 +192,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/signup': typeof SignupRoute
+  '/app/ai-tutor-create': typeof AppAiTutorCreateRoute
+  '/app/ai-tutor-library': typeof AppAiTutorLibraryRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/tutor': typeof AppTutorRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/onboarding/class': typeof OnboardingClassRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/language': typeof OnboardingLanguageRoute
@@ -173,11 +207,13 @@ export interface FileRoutesByFullPath {
   '/onboarding/review': typeof OnboardingReviewRoute
   '/onboarding/subjects': typeof OnboardingSubjectsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
+  '/app/ai-tutor/$lessonId': typeof AppAiTutorLessonIdRouteWithChildren
   '/app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/app/live/create': typeof AppLiveCreateRoute
   '/app/live/join': typeof AppLiveJoinRoute
   '/app/subjects/$subjectId': typeof AppSubjectsSubjectIdRoute
   '/app/subjects/': typeof AppSubjectsIndexRoute
+  '/app/ai-tutor/$lessonId/upload': typeof AppAiTutorLessonIdUploadRoute
   '/app/live/teach/$code': typeof AppLiveTeachCodeRoute
   '/app/live/watch/$code': typeof AppLiveWatchCodeRoute
 }
@@ -187,11 +223,14 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/signup': typeof SignupRoute
+  '/app/ai-tutor-create': typeof AppAiTutorCreateRoute
+  '/app/ai-tutor-library': typeof AppAiTutorLibraryRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/tutor': typeof AppTutorRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/onboarding/class': typeof OnboardingClassRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/language': typeof OnboardingLanguageRoute
@@ -199,11 +238,13 @@ export interface FileRoutesByTo {
   '/onboarding/review': typeof OnboardingReviewRoute
   '/onboarding/subjects': typeof OnboardingSubjectsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
+  '/app/ai-tutor/$lessonId': typeof AppAiTutorLessonIdRouteWithChildren
   '/app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/app/live/create': typeof AppLiveCreateRoute
   '/app/live/join': typeof AppLiveJoinRoute
   '/app/subjects/$subjectId': typeof AppSubjectsSubjectIdRoute
   '/app/subjects': typeof AppSubjectsIndexRoute
+  '/app/ai-tutor/$lessonId/upload': typeof AppAiTutorLessonIdUploadRoute
   '/app/live/teach/$code': typeof AppLiveTeachCodeRoute
   '/app/live/watch/$code': typeof AppLiveWatchCodeRoute
 }
@@ -214,11 +255,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/signup': typeof SignupRoute
+  '/app/ai-tutor-create': typeof AppAiTutorCreateRoute
+  '/app/ai-tutor-library': typeof AppAiTutorLibraryRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/profile': typeof AppProfileRoute
   '/app/progress': typeof AppProgressRoute
   '/app/tutor': typeof AppTutorRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/update-password': typeof AuthUpdatePasswordRoute
   '/onboarding/class': typeof OnboardingClassRoute
   '/onboarding/complete': typeof OnboardingCompleteRoute
   '/onboarding/language': typeof OnboardingLanguageRoute
@@ -226,11 +270,13 @@ export interface FileRoutesById {
   '/onboarding/review': typeof OnboardingReviewRoute
   '/onboarding/subjects': typeof OnboardingSubjectsRoute
   '/onboarding/welcome': typeof OnboardingWelcomeRoute
+  '/app/ai-tutor/$lessonId': typeof AppAiTutorLessonIdRouteWithChildren
   '/app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/app/live/create': typeof AppLiveCreateRoute
   '/app/live/join': typeof AppLiveJoinRoute
   '/app/subjects/$subjectId': typeof AppSubjectsSubjectIdRoute
   '/app/subjects/': typeof AppSubjectsIndexRoute
+  '/app/ai-tutor/$lessonId/upload': typeof AppAiTutorLessonIdUploadRoute
   '/app/live/teach/$code': typeof AppLiveTeachCodeRoute
   '/app/live/watch/$code': typeof AppLiveWatchCodeRoute
 }
@@ -242,11 +288,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/signup'
+    | '/app/ai-tutor-create'
+    | '/app/ai-tutor-library'
     | '/app/dashboard'
     | '/app/profile'
     | '/app/progress'
     | '/app/tutor'
     | '/auth/callback'
+    | '/auth/update-password'
     | '/onboarding/class'
     | '/onboarding/complete'
     | '/onboarding/language'
@@ -254,11 +303,13 @@ export interface FileRouteTypes {
     | '/onboarding/review'
     | '/onboarding/subjects'
     | '/onboarding/welcome'
+    | '/app/ai-tutor/$lessonId'
     | '/app/lessons/$lessonId'
     | '/app/live/create'
     | '/app/live/join'
     | '/app/subjects/$subjectId'
     | '/app/subjects/'
+    | '/app/ai-tutor/$lessonId/upload'
     | '/app/live/teach/$code'
     | '/app/live/watch/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -268,11 +319,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/signup'
+    | '/app/ai-tutor-create'
+    | '/app/ai-tutor-library'
     | '/app/dashboard'
     | '/app/profile'
     | '/app/progress'
     | '/app/tutor'
     | '/auth/callback'
+    | '/auth/update-password'
     | '/onboarding/class'
     | '/onboarding/complete'
     | '/onboarding/language'
@@ -280,11 +334,13 @@ export interface FileRouteTypes {
     | '/onboarding/review'
     | '/onboarding/subjects'
     | '/onboarding/welcome'
+    | '/app/ai-tutor/$lessonId'
     | '/app/lessons/$lessonId'
     | '/app/live/create'
     | '/app/live/join'
     | '/app/subjects/$subjectId'
     | '/app/subjects'
+    | '/app/ai-tutor/$lessonId/upload'
     | '/app/live/teach/$code'
     | '/app/live/watch/$code'
   id:
@@ -294,11 +350,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/signup'
+    | '/app/ai-tutor-create'
+    | '/app/ai-tutor-library'
     | '/app/dashboard'
     | '/app/profile'
     | '/app/progress'
     | '/app/tutor'
     | '/auth/callback'
+    | '/auth/update-password'
     | '/onboarding/class'
     | '/onboarding/complete'
     | '/onboarding/language'
@@ -306,11 +365,13 @@ export interface FileRouteTypes {
     | '/onboarding/review'
     | '/onboarding/subjects'
     | '/onboarding/welcome'
+    | '/app/ai-tutor/$lessonId'
     | '/app/lessons/$lessonId'
     | '/app/live/create'
     | '/app/live/join'
     | '/app/subjects/$subjectId'
     | '/app/subjects/'
+    | '/app/ai-tutor/$lessonId/upload'
     | '/app/live/teach/$code'
     | '/app/live/watch/$code'
   fileRoutesById: FileRoutesById
@@ -321,11 +382,15 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRouteWithChildren
   SignupRoute: typeof SignupRoute
+  AppAiTutorCreateRoute: typeof AppAiTutorCreateRoute
+  AppAiTutorLibraryRoute: typeof AppAiTutorLibraryRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppProfileRoute: typeof AppProfileRoute
   AppProgressRoute: typeof AppProgressRoute
   AppTutorRoute: typeof AppTutorRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthUpdatePasswordRoute: typeof AuthUpdatePasswordRoute
+  AppAiTutorLessonIdRoute: typeof AppAiTutorLessonIdRouteWithChildren
   AppLessonsLessonIdRoute: typeof AppLessonsLessonIdRoute
   AppLiveCreateRoute: typeof AppLiveCreateRoute
   AppLiveJoinRoute: typeof AppLiveJoinRoute
@@ -372,6 +437,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/ai-tutor-create': {
+      id: '/app/ai-tutor-create'
+      path: '/app/ai-tutor-create'
+      fullPath: '/app/ai-tutor-create'
+      preLoaderRoute: typeof AppAiTutorCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/ai-tutor-library': {
+      id: '/app/ai-tutor-library'
+      path: '/app/ai-tutor-library'
+      fullPath: '/app/ai-tutor-library'
+      preLoaderRoute: typeof AppAiTutorLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/dashboard': {
       id: '/app/dashboard'
       path: '/app/dashboard'
@@ -405,6 +484,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/update-password': {
+      id: '/auth/update-password'
+      path: '/auth/update-password'
+      fullPath: '/auth/update-password'
+      preLoaderRoute: typeof AuthUpdatePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding/class': {
@@ -456,6 +542,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingWelcomeRouteImport
       parentRoute: typeof OnboardingRoute
     }
+    '/app/ai-tutor/$lessonId': {
+      id: '/app/ai-tutor/$lessonId'
+      path: '/app/ai-tutor/$lessonId'
+      fullPath: '/app/ai-tutor/$lessonId'
+      preLoaderRoute: typeof AppAiTutorLessonIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/lessons/$lessonId': {
       id: '/app/lessons/$lessonId'
       path: '/app/lessons/$lessonId'
@@ -490,6 +583,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/subjects/$subjectId'
       preLoaderRoute: typeof AppSubjectsSubjectIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/app/ai-tutor/$lessonId/upload': {
+      id: '/app/ai-tutor/$lessonId/upload'
+      path: '/upload'
+      fullPath: '/app/ai-tutor/$lessonId/upload'
+      preLoaderRoute: typeof AppAiTutorLessonIdUploadRouteImport
+      parentRoute: typeof AppAiTutorLessonIdRoute
     }
     '/app/live/teach/$code': {
       id: '/app/live/teach/$code'
@@ -532,17 +632,32 @@ const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
   OnboardingRouteChildren,
 )
 
+interface AppAiTutorLessonIdRouteChildren {
+  AppAiTutorLessonIdUploadRoute: typeof AppAiTutorLessonIdUploadRoute
+}
+
+const AppAiTutorLessonIdRouteChildren: AppAiTutorLessonIdRouteChildren = {
+  AppAiTutorLessonIdUploadRoute: AppAiTutorLessonIdUploadRoute,
+}
+
+const AppAiTutorLessonIdRouteWithChildren =
+  AppAiTutorLessonIdRoute._addFileChildren(AppAiTutorLessonIdRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRouteWithChildren,
   SignupRoute: SignupRoute,
+  AppAiTutorCreateRoute: AppAiTutorCreateRoute,
+  AppAiTutorLibraryRoute: AppAiTutorLibraryRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppProfileRoute: AppProfileRoute,
   AppProgressRoute: AppProgressRoute,
   AppTutorRoute: AppTutorRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthUpdatePasswordRoute: AuthUpdatePasswordRoute,
+  AppAiTutorLessonIdRoute: AppAiTutorLessonIdRouteWithChildren,
   AppLessonsLessonIdRoute: AppLessonsLessonIdRoute,
   AppLiveCreateRoute: AppLiveCreateRoute,
   AppLiveJoinRoute: AppLiveJoinRoute,

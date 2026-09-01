@@ -12,6 +12,8 @@ import {
   profileService,
   type StudentProfile,
 } from "@/services/profile.service";
+import { dashboardAnalyticsService } from "@/services/dashboard-analytics.service";
+import { getLesson } from "@/data/subjects";
 
 type AppContextValue = {
   user: AuthUser | null;
@@ -93,33 +95,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateProfile = useCallback(async (patch: Partial<StudentProfile>) => {
-    setProfile((prev) => {
-      const next = { ...prev, ...patch };
-      return next;
-    });
+    const nextProfile = { ...profile, ...patch };
+    setProfile(nextProfile);
 
     if (!user?.id) return;
 
-    const nextProfile = await profileService.save(
-      {
-        ...profile,
-        ...patch,
-      },
-      user.id,
-    );
-
-    setProfile(nextProfile);
-  }, []);
+    const savedProfile = await profileService.save(nextProfile, user.id);
+    setProfile(savedProfile);
+  }, [profile, user?.id]);
 
   const toggleLessonComplete = useCallback((lessonId: string) => {
     setCompletedLessons((prev) => {
-      const next = prev.includes(lessonId)
-        ? prev.filter((id) => id !== lessonId)
-        : [...prev, lessonId];
+      const isCompleting = !prev.includes(lessonId);
+      const next = isCompleting
+        ? [...prev, lessonId]
+        : prev.filter((id) => id !== lessonId);
       window.localStorage.setItem(COMPLETED_KEY, JSON.stringify(next));
+
+      // Record analytics event when completing
+      if (isCompleting && user?.id) {
+        const lesson = getLesson(lessonId);
+        const duration = lesson?.duration ?? 12;
+        dashboardAnalyticsService.recordCompletion(user.id, lessonId, duration);
+      }
+
       return next;
     });
-  }, []);
+  }, [user?.id]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const account = await authService.signIn(email, password);

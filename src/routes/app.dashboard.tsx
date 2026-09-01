@@ -4,9 +4,24 @@ import { AppShell } from "@/components/layout/AppShell";
 import { StatCard } from "@/components/ui-kit/StatCard";
 import { ProgressBar } from "@/components/ui-kit/ProgressBar";
 import { LessonCard } from "@/components/ui-kit/LessonCard";
-import { recentActivity, studyStats, upcomingTasks } from "@/data/dashboard";
+import { upcomingTasks } from "@/data/dashboard";
 import { getSubject, lessons } from "@/data/subjects";
 import { useApp } from "@/hooks/useApp";
+import { dashboardAnalyticsService } from "@/services/dashboard-analytics.service";
+import { useMemo } from "react";
+
+function getTimeAgoString(date: Date): string {
+  const now = new Date();
+  const secondsAgo = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (secondsAgo < 60) return "just now";
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+  const hoursAgo = Math.floor(minutesAgo / 60);
+  if (hoursAgo < 24) return `${hoursAgo}h ago`;
+  const daysAgo = Math.floor(hoursAgo / 24);
+  return `${daysAgo}d ago`;
+}
 
 export const Route = createFileRoute("/app/dashboard")({
   head: () => ({
@@ -29,13 +44,27 @@ export const Route = createFileRoute("/app/dashboard")({
 
 function DashboardPage() {
   const { profile, user, completedLessons } = useApp();
+  
+  // Compute real metrics from completion activity
+  const analytics = useMemo(() => {
+    if (!user?.id) return null;
+    
+    return {
+      streak: dashboardAnalyticsService.getCurrentStreak(user.id),
+      minutesToday: dashboardAnalyticsService.getMinutesToday(user.id),
+      hoursThisWeek: dashboardAnalyticsService.getHoursThisWeek(user.id),
+      recentEvents: dashboardAnalyticsService.getCompletionEvents(user.id).slice(0, 4),
+    };
+  }, [user?.id]);
+
   const recommended = lessons
     .filter((l) => !completedLessons.includes(l.id))
     .slice(0, 4);
-  const hasProgress = completedLessons.length > 0 || studyStats.lessonsCompleted > 0;
+  const hasProgress = completedLessons.length > 0;
+  const dailyGoalMinutes = parseInt(profile.dailyMinutes, 10) || 30;
   const goalPercent =
-    studyStats.dailyGoalMinutes > 0
-      ? (studyStats.minutesToday / studyStats.dailyGoalMinutes) * 100
+    dailyGoalMinutes > 0 && analytics
+      ? (analytics.minutesToday / dailyGoalMinutes) * 100
       : 0;
 
   return (
@@ -69,23 +98,23 @@ function DashboardPage() {
           <StatCard
             icon={Flame}
             label="Current streak"
-            value={`${studyStats.streak} days`}
-            hint={studyStats.streak > 0 ? "Keep the streak alive" : "No streak recorded yet"}
+            value={`${analytics?.streak ?? 0} days`}
+            hint={analytics?.streak ?? 0 > 0 ? "Keep the streak alive" : "No streak recorded yet"}
             accent="warning"
           />
           <StatCard
             icon={Timer}
             label="Minutes today"
-            value={`${studyStats.minutesToday} / ${studyStats.dailyGoalMinutes}`}
-            hint={studyStats.dailyGoalMinutes > 0 ? "Daily goal" : "Set a daily goal to begin tracking"}
+            value={`${analytics?.minutesToday ?? 0} / ${dailyGoalMinutes}`}
+            hint={dailyGoalMinutes > 0 ? "Daily goal" : "Set a daily goal to begin tracking"}
           />
           <StatCard
             icon={GraduationCap}
             label="Lessons completed"
-            value={`${completedLessons.length || studyStats.lessonsCompleted}`}
+            value={`${completedLessons.length}`}
             hint={
-              studyStats.totalLessons > 0
-                ? `out of ${studyStats.totalLessons} lessons`
+              lessons.length > 0
+                ? `out of ${lessons.length} lessons`
                 : "No lessons completed yet"
             }
             accent="success"
@@ -93,8 +122,8 @@ function DashboardPage() {
           <StatCard
             icon={Target}
             label="Hours this week"
-            value={`${studyStats.hoursThisWeek}h`}
-            hint={studyStats.hoursThisWeek > 0 ? "Across all subjects" : "No study time recorded yet"}
+            value={`${analytics?.hoursThisWeek ?? 0}h`}
+            hint={analytics?.hoursThisWeek ?? 0 > 0 ? "Across all subjects" : "No study time recorded yet"}
             accent="accent"
           />
         </div>
@@ -103,8 +132,8 @@ function DashboardPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Today's goal</h2>
             <span className="text-sm text-muted-foreground">
-              {studyStats.dailyGoalMinutes > 0
-                ? `${studyStats.minutesToday} of ${studyStats.dailyGoalMinutes} min`
+              {dailyGoalMinutes > 0
+                ? `${analytics?.minutesToday ?? 0} of ${dailyGoalMinutes} min`
                 : "No goal set yet"}
             </span>
           </div>
@@ -153,16 +182,21 @@ function DashboardPage() {
 
             <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
               <h2 className="font-semibold">Recent activity</h2>
-              {recentActivity.length > 0 ? (
+              {analytics?.recentEvents && analytics.recentEvents.length > 0 ? (
                 <ul className="mt-3 space-y-3">
-                  {recentActivity.slice(0, 4).map((item) => (
-                    <li key={item.id}>
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.detail} · {item.time}
-                      </p>
-                    </li>
-                  ))}
+                  {analytics.recentEvents.map((event) => {
+                    const lesson = lessons.find((l) => l.id === event.lessonId);
+                    if (!lesson) return null;
+                    const timeAgo = getTimeAgoString(new Date(event.completedAt));
+                    return (
+                      <li key={event.lessonId}>
+                        <p className="text-sm font-medium">{lesson.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Completed · {timeAgo}
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <p className="mt-3 text-sm text-muted-foreground">No study activity has been recorded yet.</p>

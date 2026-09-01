@@ -49,6 +49,8 @@ export function useLiveWebRTC({ classId, role, active = true }: Options) {
 
   const [audioEnabled, setAudioEnabled] = useState(true);
 
+  const [screenShareEnabled, setScreenShareEnabled] = useState(false);
+
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -380,6 +382,52 @@ export function useLiveWebRTC({ classId, role, active = true }: Options) {
     if (!muted) void video.play().catch(() => setAudioEnabled(false));
   }, []);
 
+  const shareScreen = useCallback(async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      setMediaError("Screen sharing is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      const videoTrack = displayStream.getVideoTracks()[0];
+      if (!videoTrack) return;
+
+      const currentStream = localStreamRef.current;
+      if (currentStream) {
+        const existingVideoTracks = currentStream.getVideoTracks();
+        for (const existingTrack of existingVideoTracks) {
+          currentStream.removeTrack(existingTrack);
+        }
+        currentStream.addTrack(videoTrack);
+      }
+
+      setScreenShareEnabled(true);
+      setCameraEnabled(true);
+
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = currentStream ?? displayStream;
+        void localVideoRef.current.play().catch(() => {});
+      }
+
+      videoTrack.onended = () => {
+        setScreenShareEnabled(false);
+        if (currentStream) {
+          const activeTrack = currentStream.getVideoTracks()[0];
+          if (activeTrack) {
+            currentStream.removeTrack(activeTrack);
+          }
+        }
+      };
+    } catch {
+      setMediaError("Screen sharing was cancelled or blocked by the browser.");
+    }
+  }, []);
+
   /*
    * ---------------------------------------------------------
    * END CLASS
@@ -598,6 +646,7 @@ export function useLiveWebRTC({ classId, role, active = true }: Options) {
     cameraEnabled,
     microphoneEnabled,
     audioEnabled,
+    screenShareEnabled,
     remoteStream,
 
     localVideoRef,
@@ -608,6 +657,7 @@ export function useLiveWebRTC({ classId, role, active = true }: Options) {
     toggleCamera,
     enableAudio,
     setRemoteAudioMuted,
+    shareScreen,
     endClass,
   };
 }
