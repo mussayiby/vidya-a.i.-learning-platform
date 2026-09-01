@@ -244,8 +244,8 @@ function CreateAITutorLesson() {
 
         teacher_language: teacherLanguage,
 
-        // Student languages are selected later.
-        target_languages: null,
+        // Student languages are selected dynamically by students
+        target_languages: [],
 
         // Original uploaded media.
         storage_path: storagePath,

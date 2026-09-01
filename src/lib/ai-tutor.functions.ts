@@ -48,21 +48,7 @@ const CreateLessonInput = z.object({
     .max(200)
     .optional(),
 
-  teacherLanguage: z
-    .string()
-    .trim()
-    .min(2)
-    .max(20),
-
-  targetLanguages: z
-    .array(
-      z
-        .string()
-        .trim()
-        .min(2)
-        .max(20),
-    )
-    .min(1),
+  // teacherLanguage and targetLanguages removed
 });
 
 const LessonIdInput = z.object({
@@ -152,13 +138,9 @@ export const createAILesson = createServerFn({
 chapter:
   data.chapter?.trim() || null,
 
-topic:
-  data.title,
-
-teacher_language:
-  data.teacherLanguage,
-        target_languages:
-          data.targetLanguages,
+        topic: data.title,
+        teacher_language: 'en', // Defaulting to english
+        target_languages: [], // Empty for now, processed dynamically
 
         /*
          * These values describe the new workflow.
